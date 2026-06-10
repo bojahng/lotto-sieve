@@ -1,0 +1,28 @@
+import { DltDraw } from '../domain/dlt';
+
+export const sampleDltHistory: DltDraw[] = [
+  { issue: 'demo-024', date: '2026-06-08', front: [3, 8, 14, 18, 24], back: [1, 7] },
+  { issue: 'demo-023', date: '2026-06-05', front: [1, 9, 14, 19, 25], back: [3, 9] },
+  { issue: 'demo-022', date: '2026-06-03', front: [4, 10, 15, 20, 24], back: [5, 11] },
+  { issue: 'demo-021', date: '2026-06-01', front: [2, 8, 16, 21, 23], back: [1, 9] },
+  { issue: 'demo-020', date: '2026-05-29', front: [5, 11, 17, 22, 25], back: [3, 7] },
+  { issue: 'demo-019', date: '2026-05-27', front: [3, 12, 18, 20, 24], back: [5, 11] },
+  { issue: 'demo-018', date: '2026-05-25', front: [6, 13, 15, 19, 23], back: [1, 7] },
+  { issue: 'demo-017', date: '2026-05-22', front: [2, 10, 16, 21, 25], back: [3, 9] },
+  { issue: 'demo-016', date: '2026-05-20', front: [1, 7, 14, 18, 22], back: [5, 11] },
+  { issue: 'demo-015', date: '2026-05-18', front: [4, 9, 17, 20, 24], back: [1, 7] },
+  { issue: 'demo-014', date: '2026-05-15', front: [2, 11, 17, 24, 32], back: [3, 11] },
+  { issue: 'demo-013', date: '2026-05-13', front: [4, 10, 19, 26, 33], back: [6, 10] },
+  { issue: 'demo-012', date: '2026-05-11', front: [5, 12, 20, 28, 35], back: [2, 7] },
+  { issue: 'demo-011', date: '2026-05-08', front: [3, 15, 18, 23, 29], back: [4, 9] },
+  { issue: 'demo-010', date: '2026-05-06', front: [7, 13, 22, 27, 31], back: [5, 12] },
+  { issue: 'demo-009', date: '2026-05-04', front: [1, 8, 16, 25, 34], back: [1, 6] },
+  { issue: 'demo-008', date: '2026-05-01', front: [6, 14, 21, 30, 33], back: [3, 8] },
+  { issue: 'demo-007', date: '2026-04-29', front: [2, 10, 17, 24, 28], back: [7, 11] },
+  { issue: 'demo-006', date: '2026-04-27', front: [5, 11, 19, 26, 35], back: [2, 10] },
+  { issue: 'demo-005', date: '2026-04-24', front: [4, 12, 18, 23, 32], back: [6, 9] },
+  { issue: 'demo-004', date: '2026-04-22', front: [3, 9, 15, 22, 31], back: [4, 12] },
+  { issue: 'demo-003', date: '2026-04-20', front: [7, 13, 20, 27, 34], back: [1, 8] },
+  { issue: 'demo-002', date: '2026-04-17', front: [1, 10, 16, 25, 30], back: [5, 11] },
+  { issue: 'demo-001', date: '2026-04-15', front: [6, 14, 21, 29, 33], back: [2, 7] },
+];
