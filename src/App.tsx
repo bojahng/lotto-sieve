@@ -1393,34 +1393,52 @@ function drawTicketImageRow(
   context.lineTo(868, y - 24);
   context.stroke();
 
-  context.fillStyle = '#667085';
-  context.font = '700 15px "Microsoft YaHei", "Segoe UI", sans-serif';
-  context.fillText(String(index).padStart(2, '0'), 56, y + 4);
+  drawExportIndexLabel(context, 56, y, index);
 
   row.ticket.front.forEach((number, numberIndex) => {
-    drawExportBall(context, 120 + numberIndex * 44, y, formatNumber(number), '#b42318');
+    drawExportBall(context, 154 + numberIndex * 44, y, formatNumber(number), '#b42318');
   });
 
   context.fillStyle = '#98a2b3';
   context.font = '900 22px "Microsoft YaHei", "Segoe UI", sans-serif';
-  context.fillText('+', 344, y + 8);
+  context.fillText('+', 378, y + 8);
 
   row.ticket.back.forEach((number, numberIndex) => {
-    drawExportBall(context, 390 + numberIndex * 44, y, formatNumber(number), '#0f6cbd');
+    drawExportBall(context, 424 + numberIndex * 44, y, formatNumber(number), '#0f6cbd');
   });
 
   context.fillStyle = '#344054';
   context.font = '700 14px "Microsoft YaHei", "Segoe UI", sans-serif';
   context.fillText(
     `前和 ${row.metrics.frontSum}  后和 ${row.metrics.backSum}`,
-    515,
+    548,
     y - 8,
   );
   context.fillText(
     `${row.metrics.frontOddCount} 奇 ${row.metrics.frontEvenCount} 偶 · ${row.metrics.frontSmallCount} 小 ${row.metrics.frontBigCount} 大`,
-    515,
+    548,
     y + 14,
   );
+}
+
+function drawExportIndexLabel(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  index: number,
+) {
+  roundRect(context, x, y - 16, 68, 32, 16);
+  context.fillStyle = '#f2f4f7';
+  context.fill();
+  context.strokeStyle = 'rgba(17, 24, 39, 0.1)';
+  context.stroke();
+  context.fillStyle = '#667085';
+  context.font = '700 13px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(`第 ${index} 注`, x + 34, y + 1);
+  context.textAlign = 'start';
+  context.textBaseline = 'alphabetic';
 }
 
 function drawExportBall(
