@@ -257,6 +257,16 @@ select {
   margin-top: 12px;
 }
 
+.rule-action-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  border-radius: 8px;
+  background: #fff7ed;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -329,6 +339,29 @@ select {
 .ticket-feedback {
   color: #1f7a4d;
   font-weight: 700;
+}
+
+.cart-drawer .ant-drawer-body {
+  padding: 18px;
+  background: #fbfaf7;
+}
+
+.cart-drawer .ant-drawer-footer {
+  padding: 14px 18px;
+  background: #fff;
+}
+
+.cart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cart-footer-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .ant-float-btn {
@@ -472,6 +505,11 @@ select {
   }
 
   .ticket-action-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cart-footer {
     align-items: flex-start;
     flex-direction: column;
   }

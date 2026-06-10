@@ -1,6 +1,7 @@
 import { type Key, useMemo, useState } from 'react';
 import {
   Alert,
+  Badge,
   Button,
   Checkbox,
   Collapse,
@@ -31,10 +32,13 @@ import {
   Filter,
   HelpCircle,
   ImageDown,
+  Plus,
   Play,
   RotateCcw,
   Settings2,
+  ShoppingCart,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { generateTickets } from './domain/candidate';
 import {
@@ -127,6 +131,7 @@ export function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SportteryFetchProgress | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [result, setResult] = useState(() =>
     generateTickets(initialData.draws, DEFAULT_RULE_CONFIG, {
       targetCount: 10,
@@ -135,6 +140,8 @@ export function App() {
   );
   const [selectedTicketKeys, setSelectedTicketKeys] = useState<Key[]>([]);
   const [selectionFeedback, setSelectionFeedback] = useState<string>();
+  const [cartTickets, setCartTickets] = useState<EvaluatedTicket[]>([]);
+  const [cartFeedback, setCartFeedback] = useState<string>();
   const draws = dataState.draws;
   const dataInfo = dataState.info;
 
@@ -257,6 +264,90 @@ export function App() {
     }
   };
 
+  const addTicketsToCart = (tickets: EvaluatedTicket[]) => {
+    if (tickets.length === 0) {
+      return;
+    }
+
+    const seenKeys = new Set(cartTickets.map(getTicketRowKey));
+    const additions: EvaluatedTicket[] = [];
+    let duplicateCount = 0;
+
+    tickets.forEach((ticket) => {
+      const key = getTicketRowKey(ticket);
+
+      if (seenKeys.has(key)) {
+        duplicateCount += 1;
+        return;
+      }
+
+      seenKeys.add(key);
+      additions.push(ticket);
+    });
+
+    setCartTickets((current) => [...current, ...additions]);
+
+    const message =
+      duplicateCount > 0
+        ? `已加入 ${additions.length} 注，跳过重复 ${duplicateCount} 注`
+        : `已加入 ${additions.length} 注选号篮`;
+
+    setSelectionFeedback(message);
+    setCartFeedback(message);
+
+    if (additions.length > 0) {
+      setIsCartOpen(true);
+    }
+  };
+
+  const handleAddSelectedToCart = () => {
+    addTicketsToCart(selectedTickets);
+  };
+
+  const handleAddAllAcceptedToCart = () => {
+    addTicketsToCart(result.accepted);
+  };
+
+  const handleRemoveCartTicket = (key: string) => {
+    setCartTickets((current) => current.filter((ticket) => getTicketRowKey(ticket) !== key));
+    setCartFeedback('已从选号篮移除 1 注');
+  };
+
+  const handleClearCart = () => {
+    setCartTickets([]);
+    setCartFeedback(undefined);
+  };
+
+  const handleCopyCartTickets = async () => {
+    if (cartTickets.length === 0) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(formatTicketList(cartTickets));
+      setCartFeedback(`已复制选号篮 ${cartTickets.length} 注`);
+    } catch {
+      setCartFeedback('复制失败，请检查浏览器剪贴板权限');
+    }
+  };
+
+  const handleExportCartTickets = async () => {
+    if (cartTickets.length === 0) {
+      return;
+    }
+
+    try {
+      await exportTicketsImage(cartTickets, {
+        title: '乐筛选号清单',
+        filenamePrefix: '乐筛选号清单',
+        subtitle: '下单前确认',
+      });
+      setCartFeedback(`已导出选号篮 ${cartTickets.length} 注`);
+    } catch {
+      setCartFeedback('导出下单图失败，请稍后重试');
+    }
+  };
+
   return (
     <ConfigProvider
       theme={{
@@ -285,6 +376,11 @@ export function App() {
             <Button icon={<HelpCircle size={16} />} onClick={() => setIsHelpOpen(true)}>
               帮助
             </Button>
+            <Badge count={cartTickets.length} size="small">
+              <Button icon={<ShoppingCart size={16} />} onClick={() => setIsCartOpen(true)}>
+                选号篮
+              </Button>
+            </Badge>
             <Button
               icon={<CloudDownload size={16} />}
               loading={isSyncing}
@@ -297,9 +393,6 @@ export function App() {
                 重置
               </Button>
             </Tooltip>
-            <Button type="primary" icon={<Play size={16} />} onClick={handleGenerate}>
-              生成候选
-            </Button>
           </Space>
         </header>
 
@@ -518,6 +611,19 @@ export function App() {
                 />
               </Field>
             </RuleBlock>
+
+            <div className="rule-action-footer">
+              <Button
+                type="primary"
+                size="large"
+                block
+                icon={<Play size={17} />}
+                onClick={handleGenerate}
+              >
+                生成候选
+              </Button>
+              <Text type="secondary">生成后在右侧勾选号码，加入选号篮后统一导出。</Text>
+            </div>
           </aside>
 
           <section className="result-panel">
@@ -536,6 +642,8 @@ export function App() {
                         setSelectedTicketKeys(keys);
                         setSelectionFeedback(undefined);
                       }}
+                      onAddSelectedToCart={handleAddSelectedToCart}
+                      onAddAllToCart={handleAddAllAcceptedToCart}
                       onCopySelected={handleCopySelectedTickets}
                       onExportSelected={handleExportSelectedTickets}
                     />
@@ -561,6 +669,16 @@ export function App() {
           </section>
         </section>
         <HelpDrawer open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+        <CartDrawer
+          open={isCartOpen}
+          rows={cartTickets}
+          feedback={cartFeedback}
+          onClose={() => setIsCartOpen(false)}
+          onCopy={handleCopyCartTickets}
+          onExport={handleExportCartTickets}
+          onClear={handleClearCart}
+          onRemove={handleRemoveCartTicket}
+        />
         <FloatButton.BackTop tooltip="回到顶部" visibilityHeight={240} />
       </main>
     </ConfigProvider>
@@ -592,8 +710,9 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
               <ol className="help-list">
                 <li>点击“同步官方数据”，获取大乐透历史开奖数据。</li>
                 <li>在左侧调整规则，例如和值、奇偶、大小、连号和胆码。</li>
-                <li>点击“生成候选”，系统会随机生成号码并逐条筛选。</li>
-                <li>在候选结果中勾选号码，可复制选号或导出图片。</li>
+                <li>点击规则配置底部的“生成候选”，系统会随机生成号码并逐条筛选。</li>
+                <li>在候选结果中勾选号码，加入选号篮。</li>
+                <li>打开选号篮，复制清单或导出下单图。</li>
                 <li>继续查看排除样例、号码统计和历史数据。</li>
               </ol>
             ),
@@ -644,7 +763,9 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             children: (
               <dl className="help-dl">
                 <dt>候选结果</dt>
-                <dd>展示通过全部规则的号码组合和关键指标；勾选后可复制选号文本或导出 PNG 图片。</dd>
+                <dd>展示通过全部规则的号码组合和关键指标；勾选后可加入选号篮，也可临时复制或导出 PNG 图片。</dd>
+                <dt>选号篮</dt>
+                <dd>保存最终认可的号码，支持移除、清空、复制清单和导出下单图。</dd>
                 <dt>排除样例</dt>
                 <dd>展示部分被筛掉的号码，以及它们首先失败的规则。</dd>
                 <dt>号码统计</dt>
@@ -666,6 +787,119 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             ),
           },
         ]}
+      />
+    </Drawer>
+  );
+}
+
+function CartDrawer({
+  open,
+  rows,
+  feedback,
+  onClose,
+  onCopy,
+  onExport,
+  onClear,
+  onRemove,
+}: {
+  open: boolean;
+  rows: EvaluatedTicket[];
+  feedback?: string;
+  onClose: () => void;
+  onCopy: () => void;
+  onExport: () => void;
+  onClear: () => void;
+  onRemove: (key: string) => void;
+}) {
+  const columns: ColumnsType<EvaluatedTicket> = [
+    {
+      title: '#',
+      width: 48,
+      render: (_value, _record, index) => <Text type="secondary">{index + 1}</Text>,
+    },
+    {
+      title: '前区',
+      dataIndex: ['ticket', 'front'],
+      render: (numbers: number[]) => <NumberBalls numbers={numbers} zone="front" />,
+    },
+    {
+      title: '后区',
+      dataIndex: ['ticket', 'back'],
+      render: (numbers: number[]) => <NumberBalls numbers={numbers} zone="back" />,
+    },
+    {
+      title: '指标',
+      render: (_, record) => (
+        <Space wrap size={[4, 6]}>
+          <Tag>前和 {record.metrics.frontSum}</Tag>
+          <Tag>后和 {record.metrics.backSum}</Tag>
+          <Tag>{record.metrics.frontOddCount} 奇</Tag>
+        </Space>
+      ),
+    },
+    {
+      title: '操作',
+      width: 72,
+      render: (_, record) => (
+        <Tooltip title="移出选号篮">
+          <Button
+            type="text"
+            danger
+            icon={<Trash2 size={16} />}
+            onClick={() => onRemove(getTicketRowKey(record))}
+          />
+        </Tooltip>
+      ),
+    },
+  ];
+
+  return (
+    <Drawer
+      title={
+        <Space>
+          <ShoppingCart size={18} />
+          <span>选号篮</span>
+          <Tag color="red">{rows.length} 注</Tag>
+        </Space>
+      }
+      open={open}
+      onClose={onClose}
+      width={720}
+      className="cart-drawer"
+      footer={
+        <div className="cart-footer">
+          <div className="cart-footer-copy">
+            <Text strong>下单前确认</Text>
+            <Text type="secondary">确认选号篮内容后，可复制文本或导出清单图片。</Text>
+            {feedback ? <Text className="ticket-feedback">{feedback}</Text> : null}
+          </div>
+          <Space wrap>
+            <Button disabled={rows.length === 0} icon={<Trash2 size={16} />} onClick={onClear}>
+              清空
+            </Button>
+            <Button disabled={rows.length === 0} icon={<CopyIcon size={16} />} onClick={onCopy}>
+              复制清单
+            </Button>
+            <Button
+              type="primary"
+              disabled={rows.length === 0}
+              icon={<ImageDown size={16} />}
+              onClick={onExport}
+            >
+              导出下单图
+            </Button>
+          </Space>
+        </div>
+      }
+    >
+      <Table
+        className="data-table"
+        rowKey={getTicketRowKey}
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        scroll={{ x: 680 }}
+        locale={{ emptyText: <Empty description="选号篮为空" /> }}
       />
     </Drawer>
   );
@@ -714,6 +948,8 @@ function TicketTable({
   selectedCount,
   feedback,
   onSelectionChange,
+  onAddSelectedToCart,
+  onAddAllToCart,
   onCopySelected,
   onExportSelected,
 }: {
@@ -722,6 +958,8 @@ function TicketTable({
   selectedCount: number;
   feedback?: string;
   onSelectionChange: (keys: Key[]) => void;
+  onAddSelectedToCart: () => void;
+  onAddAllToCart: () => void;
   onCopySelected: () => void;
   onExportSelected: () => void;
 }) {
@@ -772,10 +1010,21 @@ function TicketTable({
       <div className="ticket-action-bar">
         <div className="ticket-action-copy">
           <Text strong>已选择 {selectedCount} 注</Text>
-          <Text type="secondary">勾选候选号码后可复制或导出图片</Text>
+          <Text type="secondary">勾选候选号码后加入选号篮，最后统一导出</Text>
           {feedback ? <Text className="ticket-feedback">{feedback}</Text> : null}
         </div>
         <Space wrap>
+          <Button disabled={rows.length === 0} icon={<Plus size={16} />} onClick={onAddAllToCart}>
+            整批加入
+          </Button>
+          <Button
+            type="primary"
+            icon={<ShoppingCart size={16} />}
+            disabled={selectedCount === 0}
+            onClick={onAddSelectedToCart}
+          >
+            加入选号篮
+          </Button>
           <Button
             icon={<CopyIcon size={16} />}
             disabled={selectedCount === 0}
@@ -784,7 +1033,6 @@ function TicketTable({
             复制选号
           </Button>
           <Button
-            type="primary"
             icon={<ImageDown size={16} />}
             disabled={selectedCount === 0}
             onClick={onExportSelected}
@@ -975,7 +1223,17 @@ async function copyTextToClipboard(text: string) {
   }
 }
 
-async function exportTicketsImage(rows: EvaluatedTicket[]) {
+function formatTicketList(rows: EvaluatedTicket[]) {
+  return rows.map((row, index) => `${index + 1}. ${formatTicket(row.ticket)}`).join('\n');
+}
+
+type TicketImageOptions = {
+  filenamePrefix?: string;
+  subtitle?: string;
+  title?: string;
+};
+
+async function exportTicketsImage(rows: EvaluatedTicket[], options: TicketImageOptions = {}) {
   const width = 920;
   const rowHeight = 72;
   const height = 128 + rows.length * rowHeight + 28;
@@ -994,14 +1252,17 @@ async function exportTicketsImage(rows: EvaluatedTicket[]) {
   context.scale(ratio, ratio);
 
   drawImageBackground(context, width, height);
-  drawExportHeader(context, rows.length);
+  drawExportHeader(context, rows.length, options);
 
   rows.forEach((row, index) => {
     const y = 106 + index * rowHeight;
     drawTicketImageRow(context, row, index + 1, y);
   });
 
-  await downloadCanvasAsPng(canvas, `乐筛候选号码-${formatDateForFileName(new Date())}.png`);
+  await downloadCanvasAsPng(
+    canvas,
+    `${options.filenamePrefix ?? '乐筛候选号码'}-${formatDateForFileName(new Date())}.png`,
+  );
 }
 
 function drawImageBackground(context: CanvasRenderingContext2D, width: number, height: number) {
@@ -1030,16 +1291,26 @@ function drawImageBackground(context: CanvasRenderingContext2D, width: number, h
   context.stroke();
 }
 
-function drawExportHeader(context: CanvasRenderingContext2D, count: number) {
+function drawExportHeader(
+  context: CanvasRenderingContext2D,
+  count: number,
+  options: TicketImageOptions,
+) {
   context.fillStyle = '#6f4e37';
   context.font = '700 15px "Microsoft YaHei", "Segoe UI", sans-serif';
   context.fillText('LOTTO SIEVE', 52, 56);
   context.fillStyle = '#111827';
   context.font = '900 34px "Microsoft YaHei", "Segoe UI", sans-serif';
-  context.fillText('乐筛候选号码', 52, 92);
+  context.fillText(options.title ?? '乐筛候选号码', 52, 92);
   context.fillStyle = '#475467';
   context.font = '500 14px "Microsoft YaHei", "Segoe UI", sans-serif';
-  context.fillText(`已选择 ${count} 注 · ${new Date().toLocaleString('zh-CN', { hour12: false })}`, 640, 62);
+  context.fillText(
+    `${options.subtitle ?? '已选择'} ${count} 注 · ${new Date().toLocaleString('zh-CN', {
+      hour12: false,
+    })}`,
+    640,
+    62,
+  );
   context.fillText('前区 5/35  +  后区 2/12', 640, 88);
 }
 
