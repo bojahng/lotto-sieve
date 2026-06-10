@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { type Key, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -7,6 +7,7 @@ import {
   ConfigProvider,
   Drawer,
   Empty,
+  FloatButton,
   InputNumber,
   Progress,
   Select,
@@ -25,9 +26,11 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   BarChart3,
   CloudDownload,
+  Copy as CopyIcon,
   Database,
   Filter,
   HelpCircle,
+  ImageDown,
   Play,
   RotateCcw,
   Settings2,
@@ -42,7 +45,9 @@ import {
   EvaluatedTicket,
   RuleConfig,
   formatNumber,
+  formatTicket,
   range,
+  ticketKey,
 } from './domain/dlt';
 import { NumberStat, buildDltStats } from './domain/stats';
 import { sampleDltHistory } from './data/sampleDltHistory';
@@ -128,6 +133,8 @@ export function App() {
       maxAttempts: 100000,
     }),
   );
+  const [selectedTicketKeys, setSelectedTicketKeys] = useState<Key[]>([]);
+  const [selectionFeedback, setSelectionFeedback] = useState<string>();
   const draws = dataState.draws;
   const dataInfo = dataState.info;
 
@@ -136,8 +143,19 @@ export function App() {
     [draws, config.recentWindow],
   );
 
+  const selectedTickets = useMemo(() => {
+    const selectedKeySet = new Set(selectedTicketKeys);
+
+    return result.accepted.filter((row) => selectedKeySet.has(getTicketRowKey(row)));
+  }, [result.accepted, selectedTicketKeys]);
+
   const updateConfig = <Key extends keyof RuleConfig>(key: Key, value: RuleConfig[Key]) => {
     setConfig((current) => ({ ...current, [key]: value }));
+  };
+
+  const clearTicketSelection = () => {
+    setSelectedTicketKeys([]);
+    setSelectionFeedback(undefined);
   };
 
   const handleGenerate = () => {
@@ -146,6 +164,7 @@ export function App() {
       maxAttempts,
     });
     setResult(nextResult);
+    clearTicketSelection();
   };
 
   const handleSyncOfficial = async () => {
@@ -180,6 +199,7 @@ export function App() {
           maxAttempts,
         }),
       );
+      clearTicketSelection();
     } catch (error) {
       setDataState((current) => ({
         ...current,
@@ -204,6 +224,37 @@ export function App() {
         maxAttempts: 100000,
       }),
     );
+    clearTicketSelection();
+  };
+
+  const handleCopySelectedTickets = async () => {
+    if (selectedTickets.length === 0) {
+      return;
+    }
+
+    const content = selectedTickets
+      .map((row, index) => `${index + 1}. ${formatTicket(row.ticket)}`)
+      .join('\n');
+
+    try {
+      await copyTextToClipboard(content);
+      setSelectionFeedback(`已复制 ${selectedTickets.length} 注选号`);
+    } catch {
+      setSelectionFeedback('复制失败，请检查浏览器剪贴板权限');
+    }
+  };
+
+  const handleExportSelectedTickets = async () => {
+    if (selectedTickets.length === 0) {
+      return;
+    }
+
+    try {
+      await exportTicketsImage(selectedTickets);
+      setSelectionFeedback(`已导出 ${selectedTickets.length} 注图片`);
+    } catch {
+      setSelectionFeedback('导出图片失败，请稍后重试');
+    }
   };
 
   return (
@@ -475,7 +526,20 @@ export function App() {
                 {
                   key: 'accepted',
                   label: `候选结果 ${result.accepted.length}`,
-                  children: <TicketTable rows={result.accepted} />,
+                  children: (
+                    <TicketTable
+                      rows={result.accepted}
+                      selectedRowKeys={selectedTicketKeys}
+                      selectedCount={selectedTickets.length}
+                      feedback={selectionFeedback}
+                      onSelectionChange={(keys) => {
+                        setSelectedTicketKeys(keys);
+                        setSelectionFeedback(undefined);
+                      }}
+                      onCopySelected={handleCopySelectedTickets}
+                      onExportSelected={handleExportSelectedTickets}
+                    />
+                  ),
                 },
                 {
                   key: 'rejected',
@@ -497,6 +561,7 @@ export function App() {
           </section>
         </section>
         <HelpDrawer open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+        <FloatButton.BackTop tooltip="回到顶部" visibilityHeight={240} />
       </main>
     </ConfigProvider>
   );
@@ -528,7 +593,8 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
                 <li>点击“同步官方数据”，获取大乐透历史开奖数据。</li>
                 <li>在左侧调整规则，例如和值、奇偶、大小、连号和胆码。</li>
                 <li>点击“生成候选”，系统会随机生成号码并逐条筛选。</li>
-                <li>在右侧查看候选结果、排除样例、号码统计和历史数据。</li>
+                <li>在候选结果中勾选号码，可复制选号或导出图片。</li>
+                <li>继续查看排除样例、号码统计和历史数据。</li>
               </ol>
             ),
           },
@@ -578,7 +644,7 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             children: (
               <dl className="help-dl">
                 <dt>候选结果</dt>
-                <dd>展示通过全部规则的号码组合和关键指标。</dd>
+                <dd>展示通过全部规则的号码组合和关键指标；勾选后可复制选号文本或导出 PNG 图片。</dd>
                 <dt>排除样例</dt>
                 <dd>展示部分被筛掉的号码，以及它们首先失败的规则。</dd>
                 <dt>号码统计</dt>
@@ -642,7 +708,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function TicketTable({ rows }: { rows: EvaluatedTicket[] }) {
+function TicketTable({
+  rows,
+  selectedRowKeys,
+  selectedCount,
+  feedback,
+  onSelectionChange,
+  onCopySelected,
+  onExportSelected,
+}: {
+  rows: EvaluatedTicket[];
+  selectedRowKeys: Key[];
+  selectedCount: number;
+  feedback?: string;
+  onSelectionChange: (keys: Key[]) => void;
+  onCopySelected: () => void;
+  onExportSelected: () => void;
+}) {
   const columns: ColumnsType<EvaluatedTicket> = [
     {
       title: '#',
@@ -686,15 +768,45 @@ function TicketTable({ rows }: { rows: EvaluatedTicket[] }) {
   ];
 
   return (
-    <Table
-      className="data-table"
-      rowKey={(row) => `${row.ticket.front.join('-')}-${row.ticket.back.join('-')}`}
-      columns={columns}
-      dataSource={rows}
-      pagination={false}
-      scroll={{ x: 920 }}
-      locale={{ emptyText: <Empty description="暂无候选" /> }}
-    />
+    <div className="ticket-table-wrap">
+      <div className="ticket-action-bar">
+        <div className="ticket-action-copy">
+          <Text strong>已选择 {selectedCount} 注</Text>
+          <Text type="secondary">勾选候选号码后可复制或导出图片</Text>
+          {feedback ? <Text className="ticket-feedback">{feedback}</Text> : null}
+        </div>
+        <Space wrap>
+          <Button
+            icon={<CopyIcon size={16} />}
+            disabled={selectedCount === 0}
+            onClick={onCopySelected}
+          >
+            复制选号
+          </Button>
+          <Button
+            type="primary"
+            icon={<ImageDown size={16} />}
+            disabled={selectedCount === 0}
+            onClick={onExportSelected}
+          >
+            导出图片
+          </Button>
+        </Space>
+      </div>
+      <Table
+        className="data-table"
+        rowKey={getTicketRowKey}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: onSelectionChange,
+        }}
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        scroll={{ x: 980 }}
+        locale={{ emptyText: <Empty description="暂无候选" /> }}
+      />
+    </div>
   );
 }
 
@@ -831,6 +943,221 @@ function HistoryTable({ draws }: { draws: DltDraw[] }) {
       scroll={{ x: 980 }}
     />
   );
+}
+
+function getTicketRowKey(row: EvaluatedTicket) {
+  return ticketKey(row.ticket);
+}
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back to the textarea path below when clipboard permissions are blocked.
+    }
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('copy failed');
+  }
+}
+
+async function exportTicketsImage(rows: EvaluatedTicket[]) {
+  const width = 920;
+  const rowHeight = 72;
+  const height = 128 + rows.length * rowHeight + 28;
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('canvas unavailable');
+  }
+
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  context.scale(ratio, ratio);
+
+  drawImageBackground(context, width, height);
+  drawExportHeader(context, rows.length);
+
+  rows.forEach((row, index) => {
+    const y = 106 + index * rowHeight;
+    drawTicketImageRow(context, row, index + 1, y);
+  });
+
+  await downloadCanvasAsPng(canvas, `乐筛候选号码-${formatDateForFileName(new Date())}.png`);
+}
+
+function drawImageBackground(context: CanvasRenderingContext2D, width: number, height: number) {
+  context.fillStyle = '#f5f1eb';
+  context.fillRect(0, 0, width, height);
+  context.strokeStyle = 'rgba(17, 24, 39, 0.08)';
+
+  for (let x = 0; x <= width; x += 36) {
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, height);
+    context.stroke();
+  }
+
+  for (let y = 0; y <= height; y += 36) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+
+  roundRect(context, 24, 24, width - 48, height - 48, 18);
+  context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+  context.fill();
+  context.strokeStyle = 'rgba(17, 24, 39, 0.14)';
+  context.stroke();
+}
+
+function drawExportHeader(context: CanvasRenderingContext2D, count: number) {
+  context.fillStyle = '#6f4e37';
+  context.font = '700 15px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText('LOTTO SIEVE', 52, 56);
+  context.fillStyle = '#111827';
+  context.font = '900 34px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText('乐筛候选号码', 52, 92);
+  context.fillStyle = '#475467';
+  context.font = '500 14px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText(`已选择 ${count} 注 · ${new Date().toLocaleString('zh-CN', { hour12: false })}`, 640, 62);
+  context.fillText('前区 5/35  +  后区 2/12', 640, 88);
+}
+
+function drawTicketImageRow(
+  context: CanvasRenderingContext2D,
+  row: EvaluatedTicket,
+  index: number,
+  y: number,
+) {
+  context.strokeStyle = 'rgba(17, 24, 39, 0.08)';
+  context.beginPath();
+  context.moveTo(52, y - 24);
+  context.lineTo(868, y - 24);
+  context.stroke();
+
+  context.fillStyle = '#667085';
+  context.font = '700 15px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText(String(index).padStart(2, '0'), 56, y + 4);
+
+  row.ticket.front.forEach((number, numberIndex) => {
+    drawExportBall(context, 120 + numberIndex * 44, y, formatNumber(number), '#b42318');
+  });
+
+  context.fillStyle = '#98a2b3';
+  context.font = '900 22px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText('+', 344, y + 8);
+
+  row.ticket.back.forEach((number, numberIndex) => {
+    drawExportBall(context, 390 + numberIndex * 44, y, formatNumber(number), '#0f6cbd');
+  });
+
+  context.fillStyle = '#344054';
+  context.font = '700 14px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.fillText(
+    `前和 ${row.metrics.frontSum}  后和 ${row.metrics.backSum}`,
+    515,
+    y - 8,
+  );
+  context.fillText(
+    `${row.metrics.frontOddCount} 奇 ${row.metrics.frontEvenCount} 偶 · ${row.metrics.frontSmallCount} 小 ${row.metrics.frontBigCount} 大`,
+    515,
+    y + 14,
+  );
+}
+
+function drawExportBall(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  label: string,
+  color: string,
+) {
+  context.save();
+  context.shadowColor = 'rgba(17, 24, 39, 0.16)';
+  context.shadowBlur = 6;
+  context.shadowOffsetY = 2;
+  context.fillStyle = color;
+  context.beginPath();
+  context.arc(x, y, 17, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+
+  context.fillStyle = '#fff';
+  context.font = '900 14px "Microsoft YaHei", "Segoe UI", sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(label, x, y + 1);
+  context.textAlign = 'start';
+  context.textBaseline = 'alphabetic';
+}
+
+function roundRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+}
+
+async function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string) {
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((value) => {
+      if (value) {
+        resolve(value);
+      } else {
+        reject(new Error('image export failed'));
+      }
+    }, 'image/png');
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function formatDateForFileName(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+    date.getHours(),
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
 function NumberBalls({ numbers, zone }: { numbers: number[]; zone: 'front' | 'back' }) {

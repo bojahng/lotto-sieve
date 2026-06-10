@@ -302,6 +302,39 @@ select {
   width: 100%;
 }
 
+.ticket-table-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.ticket-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ticket-action-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.ticket-feedback {
+  color: #1f7a4d;
+  font-weight: 700;
+}
+
+.ant-float-btn {
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.16);
+}
+
 .ball-row {
   display: inline-flex;
   align-items: center;
@@ -436,6 +469,11 @@ select {
 
   .check-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ticket-action-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .help-dl {
