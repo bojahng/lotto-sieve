@@ -3,7 +3,9 @@ import {
   Alert,
   Button,
   Checkbox,
+  Collapse,
   ConfigProvider,
+  Drawer,
   Empty,
   InputNumber,
   Progress,
@@ -25,6 +27,7 @@ import {
   CloudDownload,
   Database,
   Filter,
+  HelpCircle,
   Play,
   RotateCcw,
   Settings2,
@@ -118,6 +121,7 @@ export function App() {
   const [maxAttempts, setMaxAttempts] = useState(100000);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SportteryFetchProgress | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [result, setResult] = useState(() =>
     generateTickets(initialData.draws, DEFAULT_RULE_CONFIG, {
       targetCount: 10,
@@ -227,6 +231,9 @@ export function App() {
             <Title level={1}>乐筛</Title>
           </div>
           <Space wrap>
+            <Button icon={<HelpCircle size={16} />} onClick={() => setIsHelpOpen(true)}>
+              帮助
+            </Button>
             <Button
               icon={<CloudDownload size={16} />}
               loading={isSyncing}
@@ -489,8 +496,112 @@ export function App() {
             />
           </section>
         </section>
+        <HelpDrawer open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       </main>
     </ConfigProvider>
+  );
+}
+
+function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Drawer
+      title="帮助说明"
+      open={open}
+      onClose={onClose}
+      width={520}
+      className="help-drawer"
+    >
+      <div className="help-intro">
+        <Text strong>乐筛用于把选号偏好变成可调整的筛选规则。</Text>
+        <Text type="secondary">工具只负责数据整理、规则过滤和候选展示，不提供购买或出票服务。</Text>
+      </div>
+
+      <Collapse
+        bordered={false}
+        defaultActiveKey={['start', 'rules']}
+        items={[
+          {
+            key: 'start',
+            label: '快速开始',
+            children: (
+              <ol className="help-list">
+                <li>点击“同步官方数据”，获取大乐透历史开奖数据。</li>
+                <li>在左侧调整规则，例如和值、奇偶、大小、连号和胆码。</li>
+                <li>点击“生成候选”，系统会随机生成号码并逐条筛选。</li>
+                <li>在右侧查看候选结果、排除样例、号码统计和历史数据。</li>
+              </ol>
+            ),
+          },
+          {
+            key: 'metrics',
+            label: '顶部指标',
+            children: (
+              <dl className="help-dl">
+                <dt>历史期数</dt>
+                <dd>当前数据源里已经载入的开奖期数。</dd>
+                <dt>最新期号</dt>
+                <dd>当前历史数据中日期最新的一期开奖期号。</dd>
+                <dt>尝试次数</dt>
+                <dd>本次生成时随机产生并检查过多少组号码。</dd>
+                <dt>通过数量</dt>
+                <dd>通过全部启用规则后被保留下来的候选注数。</dd>
+              </dl>
+            ),
+          },
+          {
+            key: 'rules',
+            label: '规则配置',
+            children: (
+              <dl className="help-dl">
+                <dt>生成数量</dt>
+                <dd>目标注数是想要输出的候选数量；尝试上限是最多检查多少组随机号码。</dd>
+                <dt>和值</dt>
+                <dd>前区或后区号码相加后的数值范围，超出范围会被排除。</dd>
+                <dt>前区奇偶</dt>
+                <dd>控制前区 5 个号码中奇数和偶数的数量比例。</dd>
+                <dt>前区大小</dt>
+                <dd>1-17 为小号，18-35 为大号，用来控制大小号结构。</dd>
+                <dt>连号上限</dt>
+                <dd>限制前区出现连续号码的组数，例如 08、09 算 1 组连号。</dd>
+                <dt>历史重合</dt>
+                <dd>限制候选前区与任意历史期开奖前区最多重合多少个号码。</dd>
+                <dt>近期号码</dt>
+                <dd>观察最近 N 期，限制候选中来自近期号码集合的数量。</dd>
+                <dt>手动号码</dt>
+                <dd>胆码是必须包含的号码；排除号是不能出现的号码。</dd>
+              </dl>
+            ),
+          },
+          {
+            key: 'tabs',
+            label: '结果区域',
+            children: (
+              <dl className="help-dl">
+                <dt>候选结果</dt>
+                <dd>展示通过全部规则的号码组合和关键指标。</dd>
+                <dt>排除样例</dt>
+                <dd>展示部分被筛掉的号码，以及它们首先失败的规则。</dd>
+                <dt>号码统计</dt>
+                <dd>展示每个号码在历史数据中的出现次数、遗漏和冷热状态。</dd>
+                <dt>历史数据</dt>
+                <dd>展示当前载入的开奖历史，包括期号、日期、开奖号码、销量和奖池。</dd>
+              </dl>
+            ),
+          },
+          {
+            key: 'data',
+            label: '数据来源',
+            children: (
+              <ul className="help-list">
+                <li>官方数据来自中国体育彩票大乐透历史开奖接口。</li>
+                <li>同步成功后会缓存在当前浏览器，下次打开优先使用缓存。</li>
+                <li>如果同步失败或没有缓存，页面会继续使用内置样例数据。</li>
+              </ul>
+            ),
+          },
+        ]}
+      />
+    </Drawer>
   );
 }
 
