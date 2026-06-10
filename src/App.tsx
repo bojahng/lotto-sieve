@@ -97,6 +97,12 @@ type DataState = {
   info: DataInfo;
 };
 
+type ImagePreview = {
+  dataUrl: string;
+  filename: string;
+  title: string;
+};
+
 function createInitialDataState(): DataState {
   const cached = loadCachedDltHistory();
 
@@ -142,6 +148,7 @@ export function App() {
   const [selectionFeedback, setSelectionFeedback] = useState<string>();
   const [cartTickets, setCartTickets] = useState<EvaluatedTicket[]>([]);
   const [cartFeedback, setCartFeedback] = useState<string>();
+  const [imagePreview, setImagePreview] = useState<ImagePreview>();
   const draws = dataState.draws;
   const dataInfo = dataState.info;
 
@@ -251,14 +258,19 @@ export function App() {
     }
   };
 
-  const handleExportSelectedTickets = async () => {
+  const handleExportSelectedTickets = () => {
     if (selectedTickets.length === 0) {
       return;
     }
 
     try {
-      await exportTicketsImage(selectedTickets);
-      setSelectionFeedback(`已导出 ${selectedTickets.length} 注图片`);
+      const exported = exportTicketsImage(selectedTickets);
+      triggerImageDownload(exported);
+      setImagePreview({
+        ...exported,
+        title: '候选号码图片',
+      });
+      setSelectionFeedback(`已生成 ${selectedTickets.length} 注图片`);
     } catch {
       setSelectionFeedback('导出图片失败，请稍后重试');
     }
@@ -331,18 +343,23 @@ export function App() {
     }
   };
 
-  const handleExportCartTickets = async () => {
+  const handleExportCartTickets = () => {
     if (cartTickets.length === 0) {
       return;
     }
 
     try {
-      await exportTicketsImage(cartTickets, {
+      const exported = exportTicketsImage(cartTickets, {
         title: '乐筛选号清单',
         filenamePrefix: '乐筛选号清单',
         subtitle: '下单前确认',
       });
-      setCartFeedback(`已导出选号篮 ${cartTickets.length} 注`);
+      triggerImageDownload(exported);
+      setImagePreview({
+        ...exported,
+        title: '选号篮下单图',
+      });
+      setCartFeedback(`已生成选号篮 ${cartTickets.length} 注图片`);
     } catch {
       setCartFeedback('导出下单图失败，请稍后重试');
     }
@@ -679,6 +696,10 @@ export function App() {
           onClear={handleClearCart}
           onRemove={handleRemoveCartTicket}
         />
+        <ImagePreviewDrawer
+          preview={imagePreview}
+          onClose={() => setImagePreview(undefined)}
+        />
         <FloatButton.BackTop tooltip="回到顶部" visibilityHeight={240} />
       </main>
     </ConfigProvider>
@@ -901,6 +922,51 @@ function CartDrawer({
         scroll={{ x: 680 }}
         locale={{ emptyText: <Empty description="选号篮为空" /> }}
       />
+    </Drawer>
+  );
+}
+
+function ImagePreviewDrawer({
+  preview,
+  onClose,
+}: {
+  preview?: ImagePreview;
+  onClose: () => void;
+}) {
+  return (
+    <Drawer
+      title={preview?.title ?? '图片预览'}
+      open={Boolean(preview)}
+      onClose={onClose}
+      width={720}
+      className="image-preview-drawer"
+      footer={
+        preview ? (
+          <div className="image-preview-footer">
+            <Text type="secondary">{preview.filename}</Text>
+            <Space wrap>
+              <Button
+                icon={<ImageDown size={16} />}
+                onClick={() => triggerImageDownload(preview)}
+              >
+                下载图片
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => window.open(preview.dataUrl, '_blank', 'noopener,noreferrer')}
+              >
+                打开图片
+              </Button>
+            </Space>
+          </div>
+        ) : null
+      }
+    >
+      {preview ? (
+        <div className="image-preview-stage">
+          <img src={preview.dataUrl} alt={preview.title} />
+        </div>
+      ) : null}
     </Drawer>
   );
 }
@@ -1233,7 +1299,7 @@ type TicketImageOptions = {
   title?: string;
 };
 
-async function exportTicketsImage(rows: EvaluatedTicket[], options: TicketImageOptions = {}) {
+function exportTicketsImage(rows: EvaluatedTicket[], options: TicketImageOptions = {}): ImagePreview {
   const width = 920;
   const rowHeight = 72;
   const height = 128 + rows.length * rowHeight + 28;
@@ -1259,10 +1325,11 @@ async function exportTicketsImage(rows: EvaluatedTicket[], options: TicketImageO
     drawTicketImageRow(context, row, index + 1, y);
   });
 
-  await downloadCanvasAsPng(
-    canvas,
-    `${options.filenamePrefix ?? '乐筛候选号码'}-${formatDateForFileName(new Date())}.png`,
-  );
+  return {
+    dataUrl: canvas.toDataURL('image/png'),
+    filename: `${options.filenamePrefix ?? '乐筛候选号码'}-${formatDateForFileName(new Date())}.png`,
+    title: options.title ?? '乐筛候选号码',
+  };
 }
 
 function drawImageBackground(context: CanvasRenderingContext2D, width: number, height: number) {
@@ -1403,24 +1470,14 @@ function roundRect(
   context.closePath();
 }
 
-async function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string) {
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((value) => {
-      if (value) {
-        resolve(value);
-      } else {
-        reject(new Error('image export failed'));
-      }
-    }, 'image/png');
-  });
-  const url = URL.createObjectURL(blob);
+function triggerImageDownload(image: Pick<ImagePreview, 'dataUrl' | 'filename'>) {
   const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
+  link.href = image.dataUrl;
+  link.download = image.filename;
+  link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function formatDateForFileName(date: Date) {
