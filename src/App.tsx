@@ -46,6 +46,7 @@ import {
   DLT_BACK_MAX,
   DLT_FRONT_MAX,
   DltDraw,
+  DltTicketMetrics,
   EvaluatedTicket,
   RuleConfig,
   formatNumber,
@@ -53,7 +54,7 @@ import {
   range,
   ticketKey,
 } from './domain/dlt';
-import { NumberStat, buildDltStats } from './domain/stats';
+import { DltStats, NumberStat, buildDltStats, calculateTicketMetrics } from './domain/stats';
 import { sampleDltHistory } from './data/sampleDltHistory';
 import { loadCachedDltHistory, saveCachedDltHistory } from './data/dltHistoryCache';
 import {
@@ -101,6 +102,41 @@ type ImagePreview = {
   dataUrl: string;
   filename: string;
   title: string;
+};
+
+type HistoryRuleCheck = {
+  id: string;
+  label: string;
+  passed: boolean;
+  message: string;
+};
+
+type HistoryAnalyzedDraw = {
+  draw: DltDraw;
+  failedRules: HistoryRuleCheck[];
+  metrics: DltTicketMetrics;
+  passed: boolean;
+  results: HistoryRuleCheck[];
+};
+
+type HistoryRuleSummary = {
+  id: string;
+  label: string;
+  passedCount: number;
+  passRate: number;
+  total: number;
+};
+
+type HistoryRuleAnalysis = {
+  averageBackSum: number;
+  averageFrontSum: number;
+  passedCount: number;
+  passRate: number;
+  rows: HistoryAnalyzedDraw[];
+  ruleSummaries: HistoryRuleSummary[];
+  topOddPattern: string;
+  topSizePattern: string;
+  total: number;
 };
 
 function createInitialDataState(): DataState {
@@ -679,7 +715,7 @@ export function App() {
                 {
                   key: 'history',
                   label: '历史数据',
-                  children: <HistoryTable draws={draws} />,
+                  children: <HistoryTable config={config} draws={draws} stats={stats} />,
                 },
               ]}
             />
@@ -1209,33 +1245,98 @@ function NumberStatGrid({
   );
 }
 
-function HistoryTable({ draws }: { draws: DltDraw[] }) {
-  const columns: ColumnsType<DltDraw> = [
-    { title: '期号', dataIndex: 'issue' },
-    { title: '日期', dataIndex: 'date' },
+function HistoryTable({
+  config,
+  draws,
+  stats,
+}: {
+  config: RuleConfig;
+  draws: DltDraw[];
+  stats: DltStats;
+}) {
+  const analysis = useMemo(
+    () => buildHistoryRuleAnalysis(draws, config, stats),
+    [config, draws, stats],
+  );
+  const columns: ColumnsType<HistoryAnalyzedDraw> = [
+    { title: '期号', dataIndex: ['draw', 'issue'], width: 96 },
+    { title: '日期', dataIndex: ['draw', 'date'], width: 120 },
     {
       title: '前区',
-      dataIndex: 'front',
+      dataIndex: ['draw', 'front'],
+      width: 190,
       render: (numbers: number[]) => <NumberBalls numbers={numbers} zone="front" />,
     },
     {
       title: '后区',
-      dataIndex: 'back',
+      dataIndex: ['draw', 'back'],
+      width: 110,
       render: (numbers: number[]) => <NumberBalls numbers={numbers} zone="back" />,
     },
     {
+      title: '规则结果',
+      width: 130,
+      render: (_, record) => (
+        <Space wrap size={[4, 6]}>
+          <Tag color={record.passed ? 'green' : 'red'}>
+            {record.passed ? '通过' : '未通过'}
+          </Tag>
+          <Tag>
+            {record.results.length - record.failedRules.length}/{record.results.length}
+          </Tag>
+        </Space>
+      ),
+    },
+    {
+      title: '指标',
+      width: 320,
+      render: (_, record) => (
+        <Space wrap size={[4, 6]}>
+          <Tag>前和 {record.metrics.frontSum}</Tag>
+          <Tag>后和 {record.metrics.backSum}</Tag>
+          <Tag>
+            {record.metrics.frontOddCount} 奇 {record.metrics.frontEvenCount} 偶
+          </Tag>
+          <Tag>
+            {record.metrics.frontSmallCount} 小 {record.metrics.frontBigCount} 大
+          </Tag>
+          <Tag>连号 {record.metrics.consecutiveGroups}</Tag>
+          <Tag>重合 {record.metrics.maxFrontHistoryOverlap}</Tag>
+        </Space>
+      ),
+    },
+    {
+      title: '失败规则',
+      width: 220,
+      render: (_, record) =>
+        record.failedRules.length > 0 ? (
+          <Space wrap size={[4, 6]}>
+            {record.failedRules.map((rule) => (
+              <Tooltip key={rule.id} title={rule.message}>
+                <Tag color="red">{rule.label}</Tag>
+              </Tooltip>
+            ))}
+          </Space>
+        ) : (
+          <Tag color="green">全部通过</Tag>
+        ),
+    },
+    {
       title: '销量',
-      dataIndex: 'saleAmount',
+      dataIndex: ['draw', 'saleAmount'],
+      width: 120,
       render: (value?: string) => value || '-',
     },
     {
       title: '奖池',
-      dataIndex: 'poolBalance',
+      dataIndex: ['draw', 'poolBalance'],
+      width: 140,
       render: (value?: string) => value || '-',
     },
     {
       title: '公告',
-      dataIndex: 'drawPdfUrl',
+      dataIndex: ['draw', 'drawPdfUrl'],
+      width: 78,
       render: (value?: string) =>
         value ? (
           <a href={value} target="_blank" rel="noreferrer">
@@ -1248,15 +1349,267 @@ function HistoryTable({ draws }: { draws: DltDraw[] }) {
   ];
 
   return (
-    <Table
-      className="data-table"
-      rowKey="issue"
-      columns={columns}
-      dataSource={draws}
-      pagination={{ pageSize: 8 }}
-      scroll={{ x: 980 }}
-    />
+    <div className="history-analysis">
+      <section className="history-summary-panel">
+        <div className="section-heading">
+          <BarChart3 size={18} />
+          <span>历史规则统计</span>
+        </div>
+        <div className="history-kpi-grid">
+          <HistoryKpi
+            label="当前规则通过"
+            value={`${analysis.passedCount}/${analysis.total}`}
+            detail={`${analysis.passRate}%`}
+          />
+          <HistoryKpi
+            label="平均前区和值"
+            value={analysis.averageFrontSum}
+            detail={`后区均值 ${analysis.averageBackSum}`}
+          />
+          <HistoryKpi
+            label="常见奇偶"
+            value={analysis.topOddPattern}
+            detail="前区结构"
+          />
+          <HistoryKpi
+            label="常见大小"
+            value={analysis.topSizePattern}
+            detail="前区结构"
+          />
+        </div>
+        <div className="history-rule-rate-grid">
+          {analysis.ruleSummaries.map((summary) => (
+            <div key={summary.id} className="history-rule-rate">
+              <div className="history-rule-rate-head">
+                <Text strong>{summary.label}</Text>
+                <Text type="secondary">
+                  {summary.passedCount}/{summary.total}
+                </Text>
+              </div>
+              <Progress
+                percent={summary.passRate}
+                size="small"
+                strokeColor={summary.passRate >= 50 ? '#1f7a4d' : '#c56a09'}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Table
+        className="data-table"
+        rowKey={(record) => record.draw.issue}
+        columns={columns}
+        dataSource={analysis.rows}
+        pagination={{ pageSize: 8 }}
+        scroll={{ x: 1420 }}
+      />
+    </div>
   );
+}
+
+function HistoryKpi({
+  detail,
+  label,
+  value,
+}: {
+  detail: string;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="history-kpi">
+      <Text type="secondary">{label}</Text>
+      <strong>{value}</strong>
+      <span>{detail}</span>
+    </div>
+  );
+}
+
+function buildHistoryRuleAnalysis(
+  draws: DltDraw[],
+  config: RuleConfig,
+  stats: DltStats,
+): HistoryRuleAnalysis {
+  const rows = draws.map((draw) => analyzeHistoricalDraw(draw, draws, config, stats));
+  const total = rows.length;
+  const passedCount = rows.filter((row) => row.passed).length;
+  const averageFrontSum = average(rows.map((row) => row.metrics.frontSum));
+  const averageBackSum = average(rows.map((row) => row.metrics.backSum));
+  const ruleSummaries = getHistoryRuleSummaries(rows);
+
+  return {
+    averageBackSum,
+    averageFrontSum,
+    passedCount,
+    passRate: toRate(passedCount, total),
+    rows,
+    ruleSummaries,
+    topOddPattern: getTopPattern(
+      rows.map((row) => `${row.metrics.frontOddCount} 奇 ${row.metrics.frontEvenCount} 偶`),
+    ),
+    topSizePattern: getTopPattern(
+      rows.map((row) => `${row.metrics.frontSmallCount} 小 ${row.metrics.frontBigCount} 大`),
+    ),
+    total,
+  };
+}
+
+function analyzeHistoricalDraw(
+  draw: DltDraw,
+  allDraws: DltDraw[],
+  config: RuleConfig,
+  stats: DltStats,
+): HistoryAnalyzedDraw {
+  const peerDraws = allDraws.filter((item) => item.issue !== draw.issue);
+  const ticket = {
+    front: draw.front,
+    back: draw.back,
+  };
+  const metrics = calculateTicketMetrics(
+    ticket,
+    peerDraws,
+    stats.recentFrontNumbers,
+    stats.recentBackNumbers,
+  );
+  const results = evaluateHistoryRules(draw, metrics, config);
+  const failedRules = results.filter((result) => !result.passed);
+
+  return {
+    draw,
+    failedRules,
+    metrics,
+    passed: failedRules.length === 0,
+    results,
+  };
+}
+
+function evaluateHistoryRules(
+  draw: DltDraw,
+  metrics: DltTicketMetrics,
+  config: RuleConfig,
+): HistoryRuleCheck[] {
+  const missingFront = config.requiredFront.filter((number) => !draw.front.includes(number));
+  const excludedFront = draw.front.filter((number) => config.excludedFront.includes(number));
+  const missingBack = config.requiredBack.filter((number) => !draw.back.includes(number));
+  const excludedBack = draw.back.filter((number) => config.excludedBack.includes(number));
+
+  return [
+    {
+      id: 'manual-front',
+      label: '前区手动号',
+      passed: missingFront.length === 0 && excludedFront.length === 0,
+      message: `缺少 ${missingFront.join(', ') || '-'}，包含排除号 ${excludedFront.join(', ') || '-'}`,
+    },
+    {
+      id: 'manual-back',
+      label: '后区手动号',
+      passed: missingBack.length === 0 && excludedBack.length === 0,
+      message: `缺少 ${missingBack.join(', ') || '-'}，包含排除号 ${excludedBack.join(', ') || '-'}`,
+    },
+    {
+      id: 'front-sum',
+      label: '前区和值',
+      passed:
+        metrics.frontSum >= config.frontSumRange[0] &&
+        metrics.frontSum <= config.frontSumRange[1],
+      message: `前区和值 ${metrics.frontSum}，范围 ${config.frontSumRange[0]}-${config.frontSumRange[1]}`,
+    },
+    {
+      id: 'back-sum',
+      label: '后区和值',
+      passed:
+        metrics.backSum >= config.backSumRange[0] &&
+        metrics.backSum <= config.backSumRange[1],
+      message: `后区和值 ${metrics.backSum}，范围 ${config.backSumRange[0]}-${config.backSumRange[1]}`,
+    },
+    {
+      id: 'front-odd',
+      label: '前区奇偶',
+      passed: config.allowedFrontOddCounts.includes(metrics.frontOddCount),
+      message: `${metrics.frontOddCount} 奇 ${metrics.frontEvenCount} 偶`,
+    },
+    {
+      id: 'front-size',
+      label: '前区大小',
+      passed: config.allowedFrontSmallCounts.includes(metrics.frontSmallCount),
+      message: `${metrics.frontSmallCount} 小 ${metrics.frontBigCount} 大`,
+    },
+    {
+      id: 'front-consecutive',
+      label: '前区连号',
+      passed: metrics.consecutiveGroups <= config.maxConsecutiveGroups,
+      message: `${metrics.consecutiveGroups} 组连号，上限 ${config.maxConsecutiveGroups}`,
+    },
+    {
+      id: 'history-overlap',
+      label: '历史重合',
+      passed: metrics.maxFrontHistoryOverlap <= config.maxFrontHistoryOverlap,
+      message: `与其他历史期前区最大重合 ${metrics.maxFrontHistoryOverlap}，上限 ${config.maxFrontHistoryOverlap}`,
+    },
+    {
+      id: 'recent-usage',
+      label: '近期号码',
+      passed:
+        metrics.recentFrontCount <= config.maxRecentFrontCount &&
+        metrics.recentBackCount <= config.maxRecentBackCount,
+      message: `近 ${config.recentWindow} 期集合：前区 ${metrics.recentFrontCount}，后区 ${metrics.recentBackCount}`,
+    },
+  ];
+}
+
+function getHistoryRuleSummaries(rows: HistoryAnalyzedDraw[]) {
+  const firstRow = rows[0];
+
+  if (!firstRow) {
+    return [];
+  }
+
+  return firstRow.results.map((rule) => {
+    const passedCount = rows.filter((row) =>
+      row.results.find((result) => result.id === rule.id && result.passed),
+    ).length;
+
+    return {
+      id: rule.id,
+      label: rule.label,
+      passedCount,
+      passRate: toRate(passedCount, rows.length),
+      total: rows.length,
+    };
+  });
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return Number((values.reduce((total, value) => total + value, 0) / values.length).toFixed(1));
+}
+
+function getTopPattern(values: string[]) {
+  if (values.length === 0) {
+    return '-';
+  }
+
+  const counts = new Map<string, number>();
+
+  values.forEach((value) => {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  });
+
+  const [pattern, count] = [...counts.entries()].sort((left, right) => right[1] - left[1])[0];
+
+  return `${pattern} (${count}期)`;
+}
+
+function toRate(count: number, total: number) {
+  if (total === 0) {
+    return 0;
+  }
+
+  return Number(((count / total) * 100).toFixed(1));
 }
 
 function getTicketRowKey(row: EvaluatedTicket) {
