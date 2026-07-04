@@ -142,6 +142,7 @@ export default function IndexPage() {
       setAuth(session);
       Taro.showToast({ title: '登录成功', icon: 'success' });
     } catch (error) {
+      console.error('login failed', error);
       Taro.showToast({
         title: error instanceof Error ? error.message : '登录失败',
         icon: 'none',

@@ -23,26 +23,39 @@ type LoginResponse = {
 
 export async function loginWithWechat(profile?: WechatUserProfile): Promise<AuthSession> {
   if (!API_BASE) {
-    throw new Error('需要先配置 TARO_APP_API_BASE，指向你的 HTTPS 后端');
+    throw new Error('需要先配置 TARO_APP_API_BASE，指向 HTTPS 后端');
   }
 
-  const loginResult = await Taro.login();
+  let loginResult: Taro.login.SuccessCallbackResult;
+
+  try {
+    loginResult = await Taro.login();
+  } catch (error) {
+    throw new Error(`微信登录失败：${formatTaroError(error)}`);
+  }
 
   if (!loginResult.code) {
     throw new Error('微信登录失败：未获取到临时 code');
   }
 
-  const response = await Taro.request<LoginResponse>({
-    url: `${API_BASE.replace(/\/$/, '')}/api/wechat/login`,
-    method: 'POST',
-    data: {
-      code: loginResult.code,
-      profile,
-    },
-  });
+  let response: Taro.request.SuccessCallbackResult<LoginResponse>;
+
+  try {
+    response = await Taro.request<LoginResponse>({
+      url: `${API_BASE.replace(/\/$/, '')}/api/wechat/login`,
+      method: 'POST',
+      data: {
+        code: loginResult.code,
+        profile,
+      },
+    });
+  } catch (error) {
+    throw new Error(`登录接口请求失败：${formatTaroError(error)}`);
+  }
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new Error(`登录接口异常：HTTP ${response.statusCode}`);
+    const detail = response.data && typeof response.data === 'object' ? JSON.stringify(response.data) : '';
+    throw new Error(`登录接口异常：HTTP ${response.statusCode}${detail ? ` ${detail}` : ''}`);
   }
 
   if (!response.data?.token) {
@@ -65,4 +78,21 @@ export async function getWechatProfile(): Promise<WechatUserProfile | undefined>
   } catch {
     return undefined;
   }
+}
+
+function formatTaroError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    const maybeError = error as { errMsg?: string; message?: string };
+    return maybeError.errMsg || maybeError.message || JSON.stringify(error);
+  }
+
+  return '未知错误';
 }
