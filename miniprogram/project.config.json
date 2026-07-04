@@ -2,7 +2,7 @@
   "miniprogramRoot": "dist/",
   "projectname": "lotto-sieve-weapp",
   "description": "乐筛微信小程序",
-  "appid": "wx09aebd80a63b0d73",
+  "appid": "wxb07d2f21365ee634",
   "setting": {
     "urlCheck": true,
     "es6": true,
