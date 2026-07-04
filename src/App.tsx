@@ -418,12 +418,15 @@ export function App() {
     >
       <main className="app-shell">
         <header className="topbar">
-          <div>
-            <div className="eyebrow">
-              <Sparkles size={15} />
-              <span>Lotto Sieve</span>
+          <div className="brand-lockup">
+            <img className="brand-avatar" src="/avatar.svg" alt="乐筛头像" />
+            <div className="brand-copy">
+              <div className="eyebrow">
+                <Sparkles size={15} />
+                <span>Lotto Sieve</span>
+              </div>
+              <Title level={1}>乐筛</Title>
             </div>
-            <Title level={1}>乐筛</Title>
           </div>
           <Space wrap>
             <Button icon={<HelpCircle size={16} />} onClick={() => setIsHelpOpen(true)}>

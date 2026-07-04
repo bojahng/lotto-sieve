@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Lotto Sieve avatar</title>
+  <desc id="desc">Daletou rule filtering tool icon with a sieve and red-blue number balls.</desc>
+  <rect width="512" height="512" rx="112" fill="#F7F4EA"/>
+  <rect x="44" y="44" width="424" height="424" rx="92" fill="#FFFDF7" stroke="#16201B" stroke-opacity="0.1" stroke-width="4"/>
+
+  <path d="M129 151C126.2 143.8 131.5 136 139.2 136H372.8C380.5 136 385.8 143.8 383 151L316.3 316.4C314.6 320.6 310.6 323.4 306.1 323.4H205.9C201.4 323.4 197.4 320.6 195.7 316.4L129 151Z" fill="#EAF4EC" stroke="#1F7A4D" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M166 191H346" stroke="#1F7A4D" stroke-width="12" stroke-linecap="round" opacity="0.65"/>
+  <path d="M183 238H329" stroke="#1F7A4D" stroke-width="12" stroke-linecap="round" opacity="0.65"/>
+  <path d="M203 285H309" stroke="#1F7A4D" stroke-width="12" stroke-linecap="round" opacity="0.65"/>
+  <path d="M218 151L236 319" stroke="#1F7A4D" stroke-width="10" stroke-linecap="round" opacity="0.4"/>
+  <path d="M294 151L276 319" stroke="#1F7A4D" stroke-width="10" stroke-linecap="round" opacity="0.4"/>
+
+  <circle cx="177" cy="362" r="45" fill="#B84B30"/>
+  <circle cx="177" cy="362" r="32" fill="#C95B3F"/>
+  <text x="177" y="374" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="800" fill="#FFFDF7">07</text>
+
+  <circle cx="256" cy="382" r="45" fill="#2364A5"/>
+  <circle cx="256" cy="382" r="32" fill="#2D73B8"/>
+  <text x="256" y="394" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="800" fill="#FFFDF7">12</text>
+
+  <circle cx="335" cy="362" r="45" fill="#B84B30"/>
+  <circle cx="335" cy="362" r="32" fill="#C95B3F"/>
+  <text x="335" y="374" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="800" fill="#FFFDF7">33</text>
+
+  <path d="M154 421C186.5 440.4 222.3 450 261.4 450C301.1 450 337.6 439.8 371 419.3" stroke="#16201B" stroke-opacity="0.35" stroke-width="12" stroke-linecap="round"/>
+  <path d="M371 419.3L363 392" stroke="#16201B" stroke-opacity="0.35" stroke-width="12" stroke-linecap="round"/>
+  <path d="M371 419.3L343 426" stroke="#16201B" stroke-opacity="0.35" stroke-width="12" stroke-linecap="round"/>
+</svg>
