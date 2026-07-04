@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mp:build": "npm --prefix miniprogram run build:weapp",
+    "mp:dev": "npm --prefix miniprogram run dev:weapp",
+    "server:start": "npm --prefix server start"
   },
   "dependencies": {
     "antd": "^5.27.6",
