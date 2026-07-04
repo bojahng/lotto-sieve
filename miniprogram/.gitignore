@@ -2,3 +2,4 @@ node_modules/
 dist/
 .swc/
 *.tsbuildinfo
+project.private.config.json

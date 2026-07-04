@@ -20,7 +20,8 @@ export function clearStoredAuth() {
 }
 
 export function loadStoredConfig(): RuleConfig | undefined {
-  return safeGet<RuleConfig>(CONFIG_KEY);
+  const config = safeGet<RuleConfig>(CONFIG_KEY);
+  return config && typeof config === 'object' ? config : undefined;
 }
 
 export function saveStoredConfig(config: RuleConfig) {
@@ -28,7 +29,8 @@ export function saveStoredConfig(config: RuleConfig) {
 }
 
 export function loadStoredCart(): EvaluatedTicket[] {
-  return safeGet<EvaluatedTicket[]>(CART_KEY) ?? [];
+  const cart = safeGet<EvaluatedTicket[]>(CART_KEY);
+  return Array.isArray(cart) ? cart : [];
 }
 
 export function saveStoredCart(cart: EvaluatedTicket[]) {
@@ -36,7 +38,8 @@ export function saveStoredCart(cart: EvaluatedTicket[]) {
 }
 
 export function loadStoredHistory(): DltDraw[] | undefined {
-  return safeGet<DltDraw[]>(HISTORY_KEY);
+  const draws = safeGet<DltDraw[]>(HISTORY_KEY);
+  return Array.isArray(draws) ? draws : undefined;
 }
 
 export function saveStoredHistory(draws: DltDraw[]) {
@@ -45,7 +48,13 @@ export function saveStoredHistory(draws: DltDraw[]) {
 
 function safeGet<T>(key: string): T | undefined {
   try {
-    return Taro.getStorageSync<T>(key);
+    const value = Taro.getStorageSync<T | '' | null>(key);
+
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+
+    return value as T;
   } catch {
     return undefined;
   }
